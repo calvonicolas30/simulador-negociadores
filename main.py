@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import time
+from streamlit_autorefresh import st_autorefresh
 
-# ---------- CONFIG ----------
+# ---------------- CONFIG ----------------
 
 SHEET_ID = "1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA"
 
@@ -10,11 +11,11 @@ def leer_sheet(nombre):
     url = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet={nombre}"
     return pd.read_csv(url)
 
-# ---------- PAGE ----------
+# ---------------- PAGE ----------------
 
 st.set_page_config(page_title="División Negociadores - Certificación", layout="centered")
 
-# ---------- SESSION ----------
+# ---------------- SESSION ----------------
 
 if "login" not in st.session_state:
     st.session_state.login = False
@@ -25,12 +26,12 @@ if "inicio" not in st.session_state:
 if "preguntas" not in st.session_state:
     st.session_state.preguntas = None
 
-# ---------- LOGIN ----------
+# ---------------- LOGIN ----------------
 
 if not st.session_state.login:
 
     try:
-        st.image("logo_policia.png", width=180)
+        st.image("logo_policia.PNG", width=180)
     except:
         st.title("Sistema de Certificación")
 
@@ -40,31 +41,29 @@ if not st.session_state.login:
     pwd = st.text_input("Contraseña", type="password")
 
     if st.button("ACCEDER"):
-        try:
-            df_users = leer_sheet("usuarios")
-            df_users.columns = ["usuario", "password"]
+        df_users = leer_sheet("usuarios")
+        df_users.columns = ["usuario", "password"]
 
-            cred = dict(zip(
-                df_users["usuario"].astype(str).str.strip(),
-                df_users["password"].astype(str).str.strip()
-            ))
+        cred = dict(zip(
+            df_users["usuario"].astype(str).str.strip(),
+            df_users["password"].astype(str).str.strip()
+        ))
 
-            if user.strip() in cred and cred[user.strip()] == pwd.strip():
-                st.session_state.login = True
-                st.session_state.usuario = user
-                st.session_state.inicio = None
-                st.session_state.preguntas = None
-                st.rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos")
+        if user.strip() in cred and cred[user.strip()] == pwd.strip():
+            st.session_state.login = True
+            st.session_state.usuario = user
+            st.session_state.inicio = None
+            st.session_state.preguntas = None
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos")
 
-        except Exception as e:
-            st.error("No se pudo conectar con Google Sheets")
-            st.code(e)
-
-# ---------- SISTEMA ----------
+# ---------------- SISTEMA ----------------
 
 else:
+
+    # refresco cada 1 segundo → TIMER REAL
+    st_autorefresh(interval=1000, key="timer")
 
     st.sidebar.title("👮 Panel")
     st.sidebar.write(f"Usuario: **{st.session_state.usuario}**")
@@ -90,28 +89,27 @@ else:
 
     preguntas = st.session_state.preguntas
 
-    # ---------- TIMER REAL ----------
+    # ---------------- TIMER PROFESIONAL ----------------
 
-    TIEMPO = 2 * 60  # 2 minutos
+    TIEMPO_LIMITE = 2 * 60   # 2 minutos reales
 
     if st.session_state.inicio is None:
         st.session_state.inicio = time.time()
 
-    restante = int(TIEMPO - (time.time() - st.session_state.inicio))
-
-    reloj = st.sidebar.empty()
+    restante = int(TIEMPO_LIMITE - (time.time() - st.session_state.inicio))
 
     if restante <= 0:
-        reloj.error("⛔ TIEMPO AGOTADO")
-        st.error("⛔ TIEMPO FINALIZADO")
+        st.sidebar.error("⛔ TIEMPO AGOTADO")
+        st.error("⛔ TIEMPO FINALIZADO — EXAMEN BLOQUEADO")
+
         st.session_state.inicio = None
         st.session_state.preguntas = None
         st.stop()
 
     m, s = divmod(restante, 60)
-    reloj.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
-    # ---------- FORMULARIO ----------
+    # ---------------- EXAMEN ----------------
 
     with st.form("examen"):
 
