@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import time
-from datetime import datetime
 
 # ---------- CONFIG ----------
 
@@ -21,6 +20,8 @@ if "login" not in st.session_state:
     st.session_state.login = False
 
 if not st.session_state.login:
+
+    st.image("logo_policia.PNG", width=180)
 
     st.title("Ingreso al Sistema")
 
@@ -76,10 +77,8 @@ else:
 
     m, s = divmod(restante, 60)
     st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
-
-    if restante <= 0:
-        st.error("⛔ Tiempo agotado")
-        st.stop()
+    time.sleep(1)
+    st.rerun()
 
     with st.form("examen"):
 
