@@ -81,5 +81,82 @@ else:
 
     df_preguntas, _ = cargar_datos()
 
-    # ---
+    # --- EXAMEN ---
+    if opcion == "Realizar Examen":
+        st.header("Certificación de Competencias")
+
+        nivel_elegido = st.selectbox("Seleccione Nivel:", df_preguntas['Nivel'].dropna().unique())
+
+        preguntas_filtradas = df_preguntas[df_preguntas['Nivel'] == nivel_elegido].copy()
+
+        if preguntas_filtradas.empty:
+            st.warning("No hay preguntas cargadas para este nivel.")
+            st.stop()
+
+        if "inicio" not in st.session_state or st.session_state.get("nivel_anterior") != nivel_elegido:
+            st.session_state.inicio = time.time()
+            st.session_state.nivel_anterior = nivel_elegido
+            st.session_state.preguntas = preguntas_filtradas.sample(frac=1).reset_index(drop=True)
+
+        tiempo_limite = 10 * 60
+        transcurrido = int(time.time() - st.session_state.inicio)
+        restante = max(0, tiempo_limite - transcurrido)
+
+        m, s = divmod(restante, 60)
+        st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+
+        if restante == 0:
+            st.error("⛔ Tiempo agotado")
+            st.stop()
+
+        with st.form("form_examen"):
+            respuestas = []
+
+            for i, fila in st.session_state.preguntas.iterrows():
+                st.write(f"**{i+1}. {fila['Pregunta']}**")
+                opciones = [
+                    str(fila['Opción_A']),
+                    str(fila['Opción_B']),
+                    str(fila['Opción_C'])
+                ]
+                r = st.radio("Seleccione:", opciones, key=f"r{i}")
+                respuestas.append(r)
+
+            enviado = st.form_submit_button("ENVIAR EXAMEN")
+
+        if enviado:
+            aciertos = sum(
+                1 for i, r in enumerate(respuestas)
+                if r == st.session_state.preguntas.iloc[i]['Correcta']
+            )
+
+            total = len(respuestas)
+            porcentaje = (aciertos / total) * 100
+            resultado = "APROBADO" if porcentaje >= 70 else "DESAPROBADO"
+
+            st.divider()
+
+            if resultado == "APROBADO":
+                st.success(f"Resultado: {porcentaje:.0f}% - {resultado}")
+                st.balloons()
+            else:
+                st.error(f"Resultado: {porcentaje:.0f}% - {resultado}")
+
+            registrar_en_historial(
+                st.session_state.usuario_actual,
+                nivel_elegido,
+                aciertos,
+                total,
+                resultado
+            )
+
+            del st.session_state.inicio
+
+    elif opcion == "Ver Historial":
+        st.header("📋 Historial de Evaluaciones")
+        try:
+            df_historial = conn.read(worksheet="historial", ttl="0")
+            st.dataframe(df_historial, use_container_width=True)
+        except:
+            st.info("Aún no hay registros.")
 
