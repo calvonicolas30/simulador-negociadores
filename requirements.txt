@@ -1,5 +1,5 @@
 streamlit
-st_gsheets_connection
+st-gsheets-connection
 pandas
 Pillow
 openpyxl
