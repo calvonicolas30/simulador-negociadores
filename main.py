@@ -39,14 +39,26 @@ if not st.session_state.autenticado:
         if st.button("ACCEDER"):
             try:
                 _, df_usuarios = cargar_datos()
-                credenciales = dict(zip(df_usuarios['usuario'].astype(str), df_usuarios['password'].astype(str)))
+
+                # ---- DEPURACIÓN ----
+                st.write("Columnas detectadas en hoja usuarios:")
+                st.write(df_usuarios.columns.tolist())
+                st.write("Primeras filas leídas:")
+                st.write(df_usuarios.head())
+                # ---------------------
+
+                credenciales = dict(zip(
+                    df_usuarios['usuario'].astype(str).str.strip(),
+                    df_usuarios['password'].astype(str).str.strip()
+                ))
                 
-                if usuario_ingresado in credenciales and str(credenciales[usuario_ingresado]) == clave_ingresada:
+                if usuario_ingresado.strip() in credenciales and credenciales[usuario_ingresado.strip()] == clave_ingresada.strip():
                     st.session_state.autenticado = True
                     st.session_state.usuario_actual = usuario_ingresado
                     st.rerun()
                 else:
                     st.error("Usuario o clave incorrectos")
+
             except Exception as e:
                 st.error("No se pudo conectar con Google Sheets.")
                 st.code(str(e))
