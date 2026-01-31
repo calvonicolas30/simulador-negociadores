@@ -29,7 +29,11 @@ if "preguntas" not in st.session_state:
 
 if not st.session_state.login:
 
-    st.image("logo_policia.PNG", width=180)
+    try:
+        st.image("logo_policia.png", width=180)
+    except:
+        st.title("Sistema de Certificación")
+
     st.title("Ingreso al Sistema")
 
     user = st.text_input("Usuario")
@@ -95,15 +99,22 @@ else:
     if st.session_state.inicio is None:
         st.session_state.inicio = time.time()
 
-    restante = max(0, int(TIEMPO_LIMITE - (time.time() - st.session_state.inicio)))
+    contenedor_tiempo = st.sidebar.empty()
 
-    reloj = st.sidebar.empty()
-    m, s = divmod(restante, 60)
-    reloj.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+    restante = int(TIEMPO_LIMITE - (time.time() - st.session_state.inicio))
 
     if restante <= 0:
-        st.error("⛔ TIEMPO AGOTADO")
+        contenedor_tiempo.error("⛔ TIEMPO AGOTADO")
+        st.error("⛔ TIEMPO AGOTADO. El examen ha finalizado.")
+        st.session_state.inicio = None
+        st.session_state.preguntas = None
         st.stop()
+
+    m, s = divmod(restante, 60)
+    contenedor_tiempo.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+
+    time.sleep(1)
+    st.experimental_rerun()
 
     # ---------- FORMULARIO ----------
 
