@@ -14,7 +14,7 @@ def leer_sheet(nombre):
 
 st.set_page_config(page_title="División Negociadores - Certificación", layout="centered")
 
-# ---------- SESSION STATE INIT ----------
+# ---------- SESSION ----------
 
 if "login" not in st.session_state:
     st.session_state.login = False
@@ -34,7 +34,7 @@ if not st.session_state.login:
     except:
         st.title("Sistema de Certificación")
 
-    st.title("Ingreso al Sistema")
+    st.title("Ingreso")
 
     user = st.text_input("Usuario")
     pwd = st.text_input("Contraseña", type="password")
@@ -70,10 +70,8 @@ else:
     st.sidebar.write(f"Usuario: **{st.session_state.usuario}**")
 
     if st.sidebar.button("Cerrar sesión"):
-        for k in ["login", "inicio", "preguntas"]:
-            if k in st.session_state:
-                st.session_state[k] = None
-        st.session_state.login = False
+        for k in list(st.session_state.keys()):
+            del st.session_state[k]
         st.rerun()
 
     st.title("Certificación de Competencias")
@@ -92,29 +90,26 @@ else:
 
     preguntas = st.session_state.preguntas
 
-    # ---------- TEMPORIZADOR REAL ----------
+    # ---------- TIMER REAL ----------
 
-    TIEMPO_LIMITE = 2 * 60  # 2 minutos
+    TIEMPO = 2 * 60  # 2 minutos
 
     if st.session_state.inicio is None:
         st.session_state.inicio = time.time()
 
-    contenedor_tiempo = st.sidebar.empty()
+    restante = int(TIEMPO - (time.time() - st.session_state.inicio))
 
-    restante = int(TIEMPO_LIMITE - (time.time() - st.session_state.inicio))
+    reloj = st.sidebar.empty()
 
     if restante <= 0:
-        contenedor_tiempo.error("⛔ TIEMPO AGOTADO")
-        st.error("⛔ TIEMPO AGOTADO. El examen ha finalizado.")
+        reloj.error("⛔ TIEMPO AGOTADO")
+        st.error("⛔ TIEMPO FINALIZADO")
         st.session_state.inicio = None
         st.session_state.preguntas = None
         st.stop()
 
     m, s = divmod(restante, 60)
-    contenedor_tiempo.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
-
-    time.sleep(1)
-    st.experimental_rerun()
+    reloj.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
     # ---------- FORMULARIO ----------
 
@@ -144,10 +139,10 @@ else:
         porcentaje = aciertos / total * 100
 
         if porcentaje >= 70:
-            st.success(f"APROBADO – {porcentaje:.0f}%")
+            st.success(f"✅ APROBADO – {porcentaje:.0f}%")
             st.balloons()
         else:
-            st.error(f"DESAPROBADO – {porcentaje:.0f}%")
+            st.error(f"❌ DESAPROBADO – {porcentaje:.0f}%")
 
         st.session_state.inicio = None
         st.session_state.preguntas = None
