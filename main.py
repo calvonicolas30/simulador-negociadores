@@ -1,5 +1,5 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
+from st_gsheets_connection import GSheetsConnection
 import pandas as pd
 from PIL import Image
 from datetime import datetime
