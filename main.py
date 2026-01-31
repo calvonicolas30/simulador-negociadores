@@ -41,6 +41,7 @@ if not st.session_state.login:
             if user.strip() in cred and cred[user.strip()] == pwd.strip():
                 st.session_state.login = True
                 st.session_state.usuario = user
+                st.session_state.inicio = time.time()
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos")
@@ -57,7 +58,9 @@ else:
     st.sidebar.write(f"Usuario: **{st.session_state.usuario}**")
 
     if st.sidebar.button("Cerrar sesión"):
-        st.session_state.login = False
+        for k in ["login", "inicio", "preguntas"]:
+            if k in st.session_state:
+                del st.session_state[k]
         st.rerun()
 
     st.title("Certificación de Competencias")
@@ -67,28 +70,36 @@ else:
 
     nivel = st.selectbox("Seleccione Nivel:", df_preg["Nivel"].unique())
 
-    preguntas = df_preg[df_preg["Nivel"] == nivel].sample(frac=1).reset_index(drop=True)
+    if "preguntas" not in st.session_state:
+        st.session_state.preguntas = df_preg[df_preg["Nivel"] == nivel].sample(frac=1).reset_index(drop=True)
+
+    preguntas = st.session_state.preguntas
+
+    # -------- TEMPORIZADOR 2 MINUTOS --------
+
+    TIEMPO_LIMITE = 2 * 60   # 2 minutos
 
     if "inicio" not in st.session_state:
         st.session_state.inicio = time.time()
-        st.session_state.preguntas = preguntas
 
-    tiempo_limite = 10 * 60
     transcurrido = int(time.time() - st.session_state.inicio)
-    restante = max(0, tiempo_limite - transcurrido)
+    restante = max(0, TIEMPO_LIMITE - transcurrido)
+
+    reloj = st.sidebar.empty()
 
     m, s = divmod(restante, 60)
-    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+    reloj.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
     if restante <= 0:
         st.error("⛔ Tiempo agotado")
         st.stop()
 
-    with st.form("examen"):
+    # -------- FORMULARIO --------
 
+    with st.form("examen"):
         respuestas = []
 
-        for i, fila in st.session_state.preguntas.iterrows():
+        for i, fila in preguntas.iterrows():
             st.write(f"**{i+1}. {fila['Pregunta']}**")
             r = st.radio("Seleccione:", [
                 fila['Opción_A'],
@@ -103,7 +114,7 @@ else:
 
         aciertos = sum(
             1 for i, r in enumerate(respuestas)
-            if r == st.session_state.preguntas.iloc[i]["Correcta"]
+            if r == preguntas.iloc[i]["Correcta"]
         )
 
         total = len(respuestas)
@@ -115,7 +126,7 @@ else:
         else:
             st.error(f"DESAPROBADO – {porcentaje:.0f}%")
 
-        del st.session_state.inicio
-
-        del st.session_state.inicio
+        for k in ["inicio", "preguntas"]:
+            if k in st.session_state:
+                del st.session_state[k]
 
