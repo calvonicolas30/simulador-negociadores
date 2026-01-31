@@ -14,15 +14,22 @@ def leer_sheet(nombre):
 
 st.set_page_config(page_title="División Negociadores - Certificación", layout="centered")
 
-# ---------- LOGIN ----------
+# ---------- SESSION STATE INIT ----------
 
 if "login" not in st.session_state:
     st.session_state.login = False
 
+if "inicio" not in st.session_state:
+    st.session_state.inicio = None
+
+if "preguntas" not in st.session_state:
+    st.session_state.preguntas = None
+
+# ---------- LOGIN ----------
+
 if not st.session_state.login:
 
-    st.image("logo_policia.PNG", width=180)
-
+    st.image("logo_policia.png", width=180)
     st.title("Ingreso al Sistema")
 
     user = st.text_input("Usuario")
@@ -41,7 +48,8 @@ if not st.session_state.login:
             if user.strip() in cred and cred[user.strip()] == pwd.strip():
                 st.session_state.login = True
                 st.session_state.usuario = user
-                st.session_state.inicio = time.time()
+                st.session_state.inicio = None
+                st.session_state.preguntas = None
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos")
@@ -60,7 +68,8 @@ else:
     if st.sidebar.button("Cerrar sesión"):
         for k in ["login", "inicio", "preguntas"]:
             if k in st.session_state:
-                del st.session_state[k]
+                st.session_state[k] = None
+        st.session_state.login = False
         st.rerun()
 
     st.title("Certificación de Competencias")
@@ -70,33 +79,36 @@ else:
 
     nivel = st.selectbox("Seleccione Nivel:", df_preg["Nivel"].unique())
 
-    if "preguntas" not in st.session_state:
-        st.session_state.preguntas = df_preg[df_preg["Nivel"] == nivel].sample(frac=1).reset_index(drop=True)
+    if st.session_state.preguntas is None:
+        st.session_state.preguntas = (
+            df_preg[df_preg["Nivel"] == nivel]
+            .sample(frac=1)
+            .reset_index(drop=True)
+        )
 
     preguntas = st.session_state.preguntas
 
-    # -------- TEMPORIZADOR 2 MINUTOS --------
+    # ---------- TEMPORIZADOR REAL ----------
 
-    TIEMPO_LIMITE = 2 * 60   # 2 minutos
+    TIEMPO_LIMITE = 2 * 60  # 2 minutos
 
-    if "inicio" not in st.session_state:
+    if st.session_state.inicio is None:
         st.session_state.inicio = time.time()
 
-    transcurrido = int(time.time() - st.session_state.inicio)
-    restante = max(0, TIEMPO_LIMITE - transcurrido)
+    restante = max(0, int(TIEMPO_LIMITE - (time.time() - st.session_state.inicio)))
 
     reloj = st.sidebar.empty()
-
     m, s = divmod(restante, 60)
     reloj.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
     if restante <= 0:
-        st.error("⛔ Tiempo agotado")
+        st.error("⛔ TIEMPO AGOTADO")
         st.stop()
 
-    # -------- FORMULARIO --------
+    # ---------- FORMULARIO ----------
 
     with st.form("examen"):
+
         respuestas = []
 
         for i, fila in preguntas.iterrows():
@@ -126,7 +138,5 @@ else:
         else:
             st.error(f"DESAPROBADO – {porcentaje:.0f}%")
 
-        for k in ["inicio", "preguntas"]:
-            if k in st.session_state:
-                del st.session_state[k]
-
+        st.session_state.inicio = None
+        st.session_state.preguntas = None
