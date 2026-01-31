@@ -21,7 +21,7 @@ if "login" not in st.session_state:
 
 if not st.session_state.login:
 
-    st.image("logo_policia.PNG", width=180)
+    st.image("logo_policia.png", width=180)
 
     st.title("Ingreso al Sistema")
 
@@ -33,8 +33,10 @@ if not st.session_state.login:
             df_users = leer_sheet("usuarios")
             df_users.columns = ["usuario", "password"]
 
-            cred = dict(zip(df_users["usuario"].astype(str).str.strip(),
-                             df_users["password"].astype(str).str.strip()))
+            cred = dict(zip(
+                df_users["usuario"].astype(str).str.strip(),
+                df_users["password"].astype(str).str.strip()
+            ))
 
             if user.strip() in cred and cred[user.strip()] == pwd.strip():
                 st.session_state.login = True
@@ -77,8 +79,10 @@ else:
 
     m, s = divmod(restante, 60)
     st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
-    time.sleep(1)
-    st.rerun()
+
+    if restante <= 0:
+        st.error("⛔ Tiempo agotado")
+        st.stop()
 
     with st.form("examen"):
 
@@ -110,6 +114,8 @@ else:
             st.balloons()
         else:
             st.error(f"DESAPROBADO – {porcentaje:.0f}%")
+
+        del st.session_state.inicio
 
         del st.session_state.inicio
 
