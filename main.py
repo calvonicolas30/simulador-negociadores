@@ -40,7 +40,7 @@ if not st.session_state.autenticado:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         try:
-            st.image("logo_policia.png", width=200)
+            st.image("logotipo_policia.png", width=200)
         except:
             st.info("Sistema de Certificación - División Negociadores")
         
