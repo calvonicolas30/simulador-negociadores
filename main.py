@@ -21,7 +21,7 @@ if "login" not in st.session_state:
 
 if not st.session_state.login:
 
-    st.image("logo_policia.png", width=180)
+    st.image("logo_policia.PNG", width=180)
 
     st.title("Ingreso al Sistema")
 
