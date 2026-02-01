@@ -33,16 +33,18 @@ if not st.session_state.autenticado:
 
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.image("logo_policia.png", width=320)
+        st.image("logo_policia.PNG", width=320)
 
     st.markdown("<h1 style='text-align:center;'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
     st.divider()
 
-    usuario = st.text_input("Usuario", key="user")
-    clave   = st.text_input("Contraseña", type="password", key="pass")
+    with st.form("login_form", clear_on_submit=False):
+        usuario = st.text_input("Usuario")
+        clave   = st.text_input("Contraseña", type="password")
+        entrar  = st.form_submit_button("ACCEDER")
 
-    if st.button("ACCEDER") or clave and st.session_state.get("enter"):
+    if entrar:
 
         try:
             df_users = leer_usuarios()
@@ -57,7 +59,7 @@ if not st.session_state.autenticado:
             else:
                 st.error("Usuario o contraseña incorrectos")
 
-        except Exception as e:
+        except Exception:
             st.error("No se pudo conectar con Google Sheets")
 
 # ==========================================
@@ -101,7 +103,9 @@ else:
         opciones = [fila["Opción_A"], fila["Opción_B"], fila["Opción_C"]]
 
         if i in st.session_state.respuestas:
-            st.radio("Respuesta:", opciones, index=opciones.index(st.session_state.respuestas[i]), disabled=True, key=f"q{i}")
+            st.radio("Respuesta:", opciones,
+                     index=opciones.index(st.session_state.respuestas[i]),
+                     disabled=True, key=f"q{i}")
         else:
             r = st.radio("Respuesta:", opciones, key=f"q{i}")
             if st.button("Confirmar", key=f"b{i}"):
