@@ -48,7 +48,7 @@ if not st.session_state.login:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         try:
-            st.image("logo_policia.png", width=320)
+            st.image("logo_policia.PNG", width=320)
         except:
             pass
 
