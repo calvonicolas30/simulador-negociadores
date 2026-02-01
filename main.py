@@ -4,152 +4,124 @@ import time
 
 # ================= CONFIG ==================
 
-st.set_page_config(
-    page_title="División Negociadores",
-    page_icon="🛡",
-    layout="centered"
-)
+st.set_page_config(page_title="División Negociadores", layout="centered")
 
-SHEET_ID = "1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA"
-USUARIOS_CSV = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid=0"
-PREGUNTAS_CSV = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&gid=275635797"
+PREGUNTAS_CSV = "https://docs.google.com/spreadsheets/d/1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA/export?format=csv&gid=0"
+USUARIOS_CSV   = "https://docs.google.com/spreadsheets/d/1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA/export?format=csv&gid=275635797"
 
-TIEMPO_TOTAL = 120  # 2 minutos
+TIEMPO_EXAMEN = 2 * 60   # 2 minutos
 
-# ================ FUNCIONES =================
+# ==========================================
 
 @st.cache_data
-def leer_sheet_csv(url):
-    return pd.read_csv(url)
+def leer_preguntas():
+    return pd.read_csv(PREGUNTAS_CSV)
 
-# ============== SESSION STATE ===============
+@st.cache_data
+def leer_usuarios():
+    df = pd.read_csv(USUARIOS_CSV, header=None)
+    df = df.iloc[:, :2]
+    df.columns = ["usuario", "password"]
+    return df
 
-for k, v in {
-    "login": False,
-    "inicio": None,
-    "preguntas": None,
-    "indice": 0,
-    "puntaje": 0,
-    "respuestas": {},
-    "bloqueadas": set()
-}.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
+# ==========================================
 
-# ================= LOGIN =====================
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
 
-if not st.session_state.login:
-
-    st.markdown("<br><br>", unsafe_allow_html=True)
+if not st.session_state.autenticado:
 
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
+        st.image("logo_policia.png", width=320)
+
+    st.markdown("<h1 style='text-align:center;'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
+    st.divider()
+
+    usuario = st.text_input("Usuario", key="user")
+    clave   = st.text_input("Contraseña", type="password", key="pass")
+
+    if st.button("ACCEDER") or clave and st.session_state.get("enter"):
+
         try:
-            st.image("logo_policia.PNG", width=320)
-        except:
-            pass
+            df_users = leer_usuarios()
+            cred = dict(zip(df_users["usuario"].astype(str), df_users["password"].astype(str)))
 
-    st.markdown("""
-    <h1 style='text-align:center;margin-bottom:0;'>DIVISIÓN NEGOCIADORES</h1>
-    <h3 style='text-align:center;margin-top:5px;'>PROGRAMA DE CERTIFICACIÓN</h3>
-    <hr style='margin-top:15px;margin-bottom:25px;'>
-    """, unsafe_allow_html=True)
+            if usuario in cred and str(cred[usuario]) == clave:
+                st.session_state.autenticado = True
+                st.session_state.usuario_actual = usuario
+                st.session_state.inicio = time.time()
+                st.session_state.respuestas = {}
+                st.rerun()
+            else:
+                st.error("Usuario o contraseña incorrectos")
 
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        with st.form("login_form"):
-            usuario = st.text_input("Usuario")
-            clave = st.text_input("Contraseña", type="password")
-            ingresar = st.form_submit_button("ACCEDER", use_container_width=True)
+        except Exception as e:
+            st.error("No se pudo conectar con Google Sheets")
 
-            if ingresar:
-                df_users = leer_sheet_csv(USUARIOS_CSV)
-
-                # 👉 Nos quedamos solo con las primeras 2 columnas
-                df_users = df_users.iloc[:, :2]
-                df_users.columns = ["usuario", "password"]
-
-                cred = dict(zip(
-                    df_users["usuario"].astype(str).str.strip(),
-                    df_users["password"].astype(str).str.strip()
-                ))
-
-                if usuario.strip() in cred and cred[usuario.strip()] == clave.strip():
-                    st.session_state.login = True
-                    st.session_state.inicio = time.time()
-                    st.session_state.preguntas = None
-                    st.session_state.indice = 0
-                    st.session_state.puntaje = 0
-                    st.session_state.respuestas = {}
-                    st.session_state.bloqueadas = set()
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos")
-
-    st.stop()
-
-# ================= EXAMEN ===================
-
-df = leer_sheet_csv(PREGUNTAS_CSV)
-df = df.iloc[:, :6]
-df.columns = ["Nivel", "Pregunta", "Opción_A", "Opción_B", "Opción_C", "Correcta"]
-
-if st.session_state.preguntas is None:
-    st.session_state.preguntas = df.sample(frac=1).reset_index(drop=True)
-
-preguntas = st.session_state.preguntas
-
-# ================ TEMPORIZADOR ===============
-
-tiempo_restante = TIEMPO_TOTAL - int(time.time() - st.session_state.inicio)
-
-minutos = max(tiempo_restante,0) // 60
-segundos = max(tiempo_restante,0) % 60
-
-st.markdown(f"""
-<h2 style='text-align:center;color:red;'>⏳ {minutos:02d}:{segundos:02d}</h2>
-""", unsafe_allow_html=True)
-
-if tiempo_restante <= 0:
-    st.error("⛔ Tiempo agotado")
-    st.subheader(f"Puntaje final: {st.session_state.puntaje} / {len(preguntas)}")
-    st.stop()
-
-# ================= PREGUNTAS =================
-
-if st.session_state.indice < len(preguntas):
-
-    idx = st.session_state.indice
-    fila = preguntas.iloc[idx]
-
-    st.subheader(f"Pregunta {idx + 1} de {len(preguntas)}")
-    st.write(f"**{fila['Pregunta']}**")
-
-    opciones = [fila['Opción_A'], fila['Opción_B'], fila['Opción_C']]
-
-    bloqueada = idx in st.session_state.bloqueadas
-    seleccion = st.session_state.respuestas.get(idx, None)
-
-    respuesta = st.radio(
-        "Seleccione una opción:",
-        opciones,
-        index=opciones.index(seleccion) if seleccion in opciones else None,
-        disabled=bloqueada,
-        key=f"radio_{idx}"
-    )
-
-    if st.button("Siguiente", use_container_width=True):
-
-        st.session_state.respuestas[idx] = respuesta
-
-        if respuesta == fila["Correcta"]:
-            st.session_state.puntaje += 1
-        else:
-            st.session_state.bloqueadas.add(idx)
-
-        st.session_state.indice += 1
-        st.rerun()
+# ==========================================
 
 else:
-    st.success("🎉 Examen finalizado")
-    st.subheader(f"Puntaje final: {st.session_state.puntaje} / {len(preguntas)}")
+
+    st.sidebar.title("Panel de Control")
+    st.sidebar.write(f"👮 Usuario: **{st.session_state.usuario_actual}**")
+
+    if st.sidebar.button("Cerrar sesión"):
+        st.session_state.clear()
+        st.rerun()
+
+    df = leer_preguntas()
+
+    nivel = st.selectbox("Seleccione nivel:", sorted(df["Nivel"].dropna().unique()))
+    preguntas = df[df["Nivel"] == nivel].reset_index(drop=True)
+
+    if preguntas.empty:
+        st.warning("No hay preguntas para este nivel.")
+        st.stop()
+
+    if "inicio" not in st.session_state:
+        st.session_state.inicio = time.time()
+
+    tiempo_restante = TIEMPO_EXAMEN - int(time.time() - st.session_state.inicio)
+
+    if tiempo_restante <= 0:
+        st.error("⏰ TIEMPO AGOTADO")
+        st.stop()
+
+    m, s = divmod(tiempo_restante, 60)
+    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+
+    st.header("Evaluación")
+
+    for i, fila in preguntas.iterrows():
+
+        st.subheader(f"{i+1}. {fila['Pregunta']}")
+
+        opciones = [fila["Opción_A"], fila["Opción_B"], fila["Opción_C"]]
+
+        if i in st.session_state.respuestas:
+            st.radio("Respuesta:", opciones, index=opciones.index(st.session_state.respuestas[i]), disabled=True, key=f"q{i}")
+        else:
+            r = st.radio("Respuesta:", opciones, key=f"q{i}")
+            if st.button("Confirmar", key=f"b{i}"):
+                st.session_state.respuestas[i] = r
+                st.rerun()
+
+    if len(st.session_state.respuestas) == len(preguntas):
+
+        aciertos = sum(
+            1 for i, fila in preguntas.iterrows()
+            if st.session_state.respuestas[i] == fila["Correcta"]
+        )
+
+        total = len(preguntas)
+        porcentaje = aciertos / total * 100
+
+        st.divider()
+
+        if porcentaje >= 70:
+            st.success(f"RESULTADO: APROBADO — {porcentaje:.0f}%")
+            st.balloons()
+        else:
+            st.error(f"RESULTADO: DESAPROBADO — {porcentaje:.0f}%")
