@@ -36,7 +36,7 @@ if not st.session_state.login:
     st.markdown("<div style='text-align: center;'>", unsafe_allow_html=True)
 
     try:
-        st.image("logo_policia.png", width=260)
+        st.image("logo_policia.PNG", width=260)
     except:
         pass
 
