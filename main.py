@@ -39,6 +39,12 @@ if "indice" not in st.session_state:
 if "puntaje" not in st.session_state:
     st.session_state.puntaje = 0
 
+if "respuestas" not in st.session_state:
+    st.session_state.respuestas = {}
+
+if "bloqueadas" not in st.session_state:
+    st.session_state.bloqueadas = set()
+
 # ================= LOGIN =====================
 
 if not st.session_state.login:
@@ -48,7 +54,7 @@ if not st.session_state.login:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         try:
-            st.image("logo_policia.PNG", width=320)
+            st.image("logo_policia.png", width=320)
         except:
             pass
 
@@ -80,6 +86,8 @@ if not st.session_state.login:
                     st.session_state.preguntas = None
                     st.session_state.indice = 0
                     st.session_state.puntaje = 0
+                    st.session_state.respuestas = {}
+                    st.session_state.bloqueadas = set()
                     st.rerun()
                 else:
                     st.error("Usuario o contraseña incorrectos")
@@ -116,19 +124,34 @@ if tiempo_restante <= 0:
 
 if st.session_state.indice < len(preguntas):
 
-    fila = preguntas.iloc[st.session_state.indice]
+    idx = st.session_state.indice
+    fila = preguntas.iloc[idx]
 
-    st.subheader(f"Pregunta {st.session_state.indice + 1} de {len(preguntas)}")
+    st.subheader(f"Pregunta {idx + 1} de {len(preguntas)}")
     st.write(f"**{fila['Pregunta']}**")
 
     opciones = [fila['Opción_A'], fila['Opción_B'], fila['Opción_C']]
 
-    respuesta = st.radio("Seleccione una opción:", opciones, key=st.session_state.indice)
+    bloqueada = idx in st.session_state.bloqueadas
+
+    seleccion = st.session_state.respuestas.get(idx, None)
+
+    respuesta = st.radio(
+        "Seleccione una opción:",
+        opciones,
+        index=opciones.index(seleccion) if seleccion in opciones else None,
+        disabled=bloqueada,
+        key=f"radio_{idx}"
+    )
 
     if st.button("Siguiente", use_container_width=True):
 
+        st.session_state.respuestas[idx] = respuesta
+
         if respuesta == fila["Correcta"]:
             st.session_state.puntaje += 1
+        else:
+            st.session_state.bloqueadas.add(idx)
 
         st.session_state.indice += 1
         st.rerun()
@@ -136,4 +159,3 @@ if st.session_state.indice < len(preguntas):
 else:
     st.success("🎉 Examen finalizado")
     st.subheader(f"Puntaje final: {st.session_state.puntaje} / {len(preguntas)}")
-
