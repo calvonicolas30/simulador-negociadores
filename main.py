@@ -24,26 +24,17 @@ def leer_sheet_csv(url):
 
 # ============== SESSION STATE ===============
 
-if "login" not in st.session_state:
-    st.session_state.login = False
-
-if "inicio" not in st.session_state:
-    st.session_state.inicio = None
-
-if "preguntas" not in st.session_state:
-    st.session_state.preguntas = None
-
-if "indice" not in st.session_state:
-    st.session_state.indice = 0
-
-if "puntaje" not in st.session_state:
-    st.session_state.puntaje = 0
-
-if "respuestas" not in st.session_state:
-    st.session_state.respuestas = {}
-
-if "bloqueadas" not in st.session_state:
-    st.session_state.bloqueadas = set()
+for k, v in {
+    "login": False,
+    "inicio": None,
+    "preguntas": None,
+    "indice": 0,
+    "puntaje": 0,
+    "respuestas": {},
+    "bloqueadas": set()
+}.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # ================= LOGIN =====================
 
@@ -54,7 +45,7 @@ if not st.session_state.login:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         try:
-            st.image("logo_policia.png", width=320)
+            st.image("logo_policia.PNG", width=320)
         except:
             pass
 
@@ -73,6 +64,9 @@ if not st.session_state.login:
 
             if ingresar:
                 df_users = leer_sheet_csv(USUARIOS_CSV)
+
+                # 👉 Nos quedamos solo con las primeras 2 columnas
+                df_users = df_users.iloc[:, :2]
                 df_users.columns = ["usuario", "password"]
 
                 cred = dict(zip(
@@ -97,6 +91,7 @@ if not st.session_state.login:
 # ================= EXAMEN ===================
 
 df = leer_sheet_csv(PREGUNTAS_CSV)
+df = df.iloc[:, :6]
 df.columns = ["Nivel", "Pregunta", "Opción_A", "Opción_B", "Opción_C", "Correcta"]
 
 if st.session_state.preguntas is None:
@@ -133,7 +128,6 @@ if st.session_state.indice < len(preguntas):
     opciones = [fila['Opción_A'], fila['Opción_B'], fila['Opción_C']]
 
     bloqueada = idx in st.session_state.bloqueadas
-
     seleccion = st.session_state.respuestas.get(idx, None)
 
     respuesta = st.radio(
