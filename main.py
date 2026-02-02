@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+from streamlit_autorefresh import st_autorefresh
 
 # ================= CONFIG ==================
 
@@ -26,6 +27,11 @@ def leer_usuarios():
 
 # ==========================================
 
+# Auto-refresh cada 1 segundo
+st_autorefresh(interval=1000, key="timer")
+
+# ==========================================
+
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -39,28 +45,24 @@ if not st.session_state.autenticado:
     st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
     st.divider()
 
-    with st.form("login_form", clear_on_submit=False):
+    with st.form("login_form"):
         usuario = st.text_input("Usuario")
         clave   = st.text_input("Contraseña", type="password")
         entrar  = st.form_submit_button("ACCEDER")
 
     if entrar:
 
-        try:
-            df_users = leer_usuarios()
-            cred = dict(zip(df_users["usuario"].astype(str), df_users["password"].astype(str)))
+        df_users = leer_usuarios()
+        cred = dict(zip(df_users["usuario"].astype(str), df_users["password"].astype(str)))
 
-            if usuario in cred and str(cred[usuario]) == clave:
-                st.session_state.autenticado = True
-                st.session_state.usuario_actual = usuario
-                st.session_state.inicio = time.time()
-                st.session_state.respuestas = {}
-                st.rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos")
-
-        except Exception:
-            st.error("No se pudo conectar con Google Sheets")
+        if usuario in cred and str(cred[usuario]) == clave:
+            st.session_state.autenticado = True
+            st.session_state.usuario_actual = usuario
+            st.session_state.inicio = time.time()
+            st.session_state.respuestas = {}
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos")
 
 # ==========================================
 
@@ -81,9 +83,6 @@ else:
     if preguntas.empty:
         st.warning("No hay preguntas para este nivel.")
         st.stop()
-
-    if "inicio" not in st.session_state:
-        st.session_state.inicio = time.time()
 
     tiempo_restante = TIEMPO_EXAMEN - int(time.time() - st.session_state.inicio)
 
@@ -110,7 +109,6 @@ else:
             r = st.radio("Respuesta:", opciones, key=f"q{i}")
             if st.button("Confirmar", key=f"b{i}"):
                 st.session_state.respuestas[i] = r
-                st.rerun()
 
     if len(st.session_state.respuestas) == len(preguntas):
 
