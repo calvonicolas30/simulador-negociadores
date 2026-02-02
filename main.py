@@ -1,139 +1,174 @@
 import streamlit as st
 import pandas as pd
 import time
+from datetime import datetime
+from streamlit_gsheets import GSheetsConnection
 
-# ================== CONFIG ==================
+# ---------------- CONFIG ----------------
 
-st.set_page_config(page_title="División Negociadores", layout="centered")
+st.set_page_config(
+    page_title="División Negociadores - Certificación",
+    layout="centered"
+)
 
 LOGO = "logo.PNG"
+SPREADSHEET_ID = "PONÉ_ACÁ_TU_ID_REAL"
 
-USUARIOS_URL = "PEGÁ_ACÁ_TU_CSV_DE_USUARIOS"
-PREGUNTAS_URL = "PEGÁ_ACÁ_TU_CSV_DE_PREGUNTAS"
+TIEMPO_EXAMEN = 2 * 60  # 2 minutos
 
-TIEMPO_POR_PREGUNTA = 120  # 2 minutos
+# ---------------- CONEXIÓN ----------------
 
-# ================== FUNCIONES ==================
+conn = st.connection(
+    "gsheets",
+    type=GSheetsConnection,
+    spreadsheet=SPREADSHEET_ID
+)
+
+# ---------------- FUNCIONES ----------------
 
 @st.cache_data(ttl=60)
 def cargar_datos():
-    df_users = pd.read_csv(USUARIOS_URL)
-    df_preg = pd.read_csv(PREGUNTAS_URL)
-    return df_users, df_preg
+    preguntas = conn.read(worksheet="preguntas")
+    usuarios = conn.read(worksheet="usuarios")
+    return preguntas, usuarios
 
-def iniciar_timer():
-    if "fin" not in st.session_state:
-        st.session_state.fin = time.time() + TIEMPO_POR_PREGUNTA
 
-def tiempo_restante():
-    return max(0, int(st.session_state.fin - time.time()))
-
-# ================== SESIÓN ==================
-
-if "login" not in st.session_state:
-    st.session_state.login = False
-
-if "idx" not in st.session_state:
-    st.session_state.idx = 0
-
-if "bloqueada" not in st.session_state:
-    st.session_state.bloqueada = False
-
-# ================== LOGIN ==================
-
-if not st.session_state.login:
-
+def centrar_logo():
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.image(LOGO, width=260)
 
-    st.markdown("<h1 style='text-align:center'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align:center'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
 
-    st.divider()
+# ---------------- SESSION ----------------
 
-    usuario = st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
+if "login" not in st.session_state:
+    st.session_state.login = False
 
-    if st.button("Ingresar") or (usuario and password and st.session_state.get("enter", False)):
+if "inicio" not in st.session_state:
+    st.session_state.inicio = None
 
-        df_users, _ = cargar_datos()
+if "respuestas" not in st.session_state:
+    st.session_state.respuestas = {}
 
-        if ((df_users["usuario"] == usuario) & (df_users["password"] == password)).any():
-            st.session_state.login = True
-            st.session_state.fin = time.time() + TIEMPO_POR_PREGUNTA
-            st.experimental_rerun()
-        else:
-            st.error("Usuario o contraseña incorrectos")
+# ---------------- LOGIN ----------------
 
-    st.stop()
+if not st.session_state.login:
 
-# ================== PREGUNTAS ==================
+    centrar_logo()
 
-df_users, df_preg = cargar_datos()
+    st.markdown("<h1 style='text-align:center;'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
 
-if st.session_state.idx >= len(df_preg):
-    st.success("🎯 Examen finalizado")
-    st.stop()
+    with st.form("login_form", clear_on_submit=False):
+        usuario = st.text_input("Usuario")
+        clave = st.text_input("Contraseña", type="password")
+        ingresar = st.form_submit_button("INGRESAR")
 
-preg = df_preg.iloc[st.session_state.idx]
+    if ingresar:
+        try:
+            _, df_users = cargar_datos()
+            df_users.columns = ["usuario", "password"]
 
-# ================== TIMER ==================
+            credenciales = dict(zip(df_users["usuario"].astype(str),
+                                     df_users["password"].astype(str)))
 
-iniciar_timer()
-restante = tiempo_restante()
-
-mins = restante // 60
-secs = restante % 60
-
-st.markdown(f"⏳ Tiempo restante: **{mins:02}:{secs:02}**")
-
-if restante <= 0:
-    st.session_state.idx += 1
-    st.session_state.bloqueada = False
-    del st.session_state.fin
-    st.experimental_rerun()
-
-# ================== MOSTRAR VIDEO ==================
-
-if "Video" in preg and isinstance(preg["Video"], str) and preg["Video"].startswith("http"):
-
-    video_html = f"""
-    <iframe width="100%" height="315"
-    src="{preg['Video']}?controls=0&disablekb=1&modestbranding=1&rel=0"
-    frameborder="0"
-    allowfullscreen></iframe>
-    """
-    st.components.v1.html(video_html, height=340)
-
-# ================== PREGUNTA ==================
-
-st.subheader(f"Nivel: {preg['Nivel']}")
-st.markdown(f"### {preg['Pregunta']}")
-
-opciones = {
-    "A": preg["Opcion_A"],
-    "B": preg["Opcion_B"],
-    "C": preg["Opcion_C"]
-}
-
-for letra, texto in opciones.items():
-
-    if st.session_state.bloqueada:
-        st.button(f"{letra}) {texto}", disabled=True)
-    else:
-        if st.button(f"{letra}) {texto}"):
-
-            if letra == str(preg["Correcta"]).strip():
-                st.success("✅ Correcto")
-                st.session_state.idx += 1
-                st.session_state.bloqueada = False
-                del st.session_state.fin
-                time.sleep(1)
+            if usuario in credenciales and str(credenciales[usuario]) == clave:
+                st.session_state.login = True
+                st.session_state.usuario = usuario
+                st.session_state.inicio = time.time()
                 st.experimental_rerun()
             else:
-                st.error("❌ Incorrecto")
-                st.session_state.bloqueada = True
+                st.error("Usuario o contraseña incorrectos")
 
-    st.success("Sistema operativo")
+        except Exception as e:
+            st.error(f"No se pudo conectar con Google Sheets: {e}")
 
+# ---------------- SISTEMA ----------------
+
+else:
+
+    st.sidebar.success(f"Usuario: {st.session_state.usuario}")
+
+    if st.sidebar.button("Cerrar sesión"):
+        st.session_state.clear()
+        st.experimental_rerun()
+
+    df_preguntas, _ = cargar_datos()
+
+    nivel = st.selectbox("Seleccione nivel:", df_preguntas["Nivel"].unique())
+
+    preguntas = df_preguntas[df_preguntas["Nivel"] == nivel].reset_index(drop=True)
+
+    # ---------------- TIMER REAL ----------------
+
+    if st.session_state.inicio is None:
+        st.session_state.inicio = time.time()
+
+    restante = int(TIEMPO_EXAMEN - (time.time() - st.session_state.inicio))
+
+    if restante <= 0:
+        st.error("⛔ TIEMPO FINALIZADO")
+        st.stop()
+
+    min, seg = divmod(restante, 60)
+    st.sidebar.warning(f"⏳ Tiempo restante: {min:02d}:{seg:02d}")
+    time.sleep(1)
+    st.experimental_rerun()
+
+    # ---------------- PREGUNTAS ----------------
+
+    for i, fila in preguntas.iterrows():
+
+        st.markdown(f"### {i+1}. {fila['Pregunta']}")
+
+        # VIDEO OPCIONAL
+        if "Video" in fila and pd.notna(fila["Video"]):
+
+            video_html = f"""
+            <iframe width="100%" height="350"
+            src="{fila['Video']}?controls=0&rel=0&modestbranding=1"
+            frameborder="0"
+            allowfullscreen>
+            </iframe>
+            """
+            st.components.v1.html(video_html, height=360)
+
+        opciones = [fila["Opción_A"], fila["Opción_B"], fila["Opción_C"]]
+
+        key = f"preg_{i}"
+
+        if key not in st.session_state.respuestas:
+
+            respuesta = st.radio("Seleccione:", opciones, key=key)
+
+            if st.button(f"Confirmar {i+1}"):
+                st.session_state.respuestas[key] = respuesta
+                st.experimental_rerun()
+
+        else:
+            marcada = st.session_state.respuestas[key]
+
+            if marcada == fila["Correcta"]:
+                st.success(f"✔ Correcta: {marcada}")
+            else:
+                st.error(f"✖ Incorrecta: {marcada}")
+                st.info(f"✔ Correcta: {fila['Correcta']}")
+
+    # ---------------- RESULTADO FINAL ----------------
+
+    if len(st.session_state.respuestas) == len(preguntas):
+
+        aciertos = sum(
+            1 for i, fila in preguntas.iterrows()
+            if st.session_state.respuestas[f"preg_{i}"] == fila["Correcta"]
+        )
+
+        porcentaje = aciertos / len(preguntas) * 100
+
+        st.divider()
+
+        if porcentaje >= 70:
+            st.success(f"APROBADO — {porcentaje:.0f}%")
+            st.balloons()
+        else:
+            st.error(f"DESAPROBADO — {porcentaje:.0f}%")
