@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
-from streamlit_gsheets import GSheetsConnection
+from st_gsheets_connection import GSheetsConnection
 
 # ---------------- CONFIG ----------------
 st.set_page_config(page_title="División Negociadores", layout="centered")
