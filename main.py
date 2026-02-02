@@ -3,139 +3,142 @@ import pandas as pd
 import time
 from datetime import datetime
 
-# =================== CONFIG ===================
+# ---------------- CONFIG ----------------
+
+st.set_page_config(page_title="División Negociadores", layout="centered")
 
 SHEET_ID = "1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA"
+URL_BASE = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/export?format=csv&gid="
 
-URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=usuarios"
-URL_QUESTIONS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=preguntas"
+GID_PREGUNTAS = "0"
+GID_USUARIOS = "0"
 
-TIEMPO_EXAMEN = 2 * 60  # 2 minutos
+TIEMPO_EXAMEN = 120  # 2 minutos
 
-# =================== FUNCIONES ===================
+# ---------------- FUNCIONES ----------------
 
-@st.cache_data(ttl=300)
-def cargar_datos():
-    return pd.read_csv(URL_USERS), pd.read_csv(URL_QUESTIONS)
+def leer_sheet(gid):
+    return pd.read_csv(URL_BASE + gid)
 
-# =================== SESION ===================
+def youtube_embed(url):
+    if "watch?v=" in url:
+        video_id = url.split("watch?v=")[1].split("&")[0]
+    else:
+        return None
+    return f"https://www.youtube.com/embed/{video_id}?controls=0&disablekb=1&fs=0&modestbranding=1"
+
+# ---------------- SESSION ----------------
 
 if "login" not in st.session_state:
     st.session_state.login = False
 
 if "inicio" not in st.session_state:
-    st.session_state.inicio = time.time()
+    st.session_state.inicio = None
 
-# =================== LOGIN ===================
+if "respuestas" not in st.session_state:
+    st.session_state.respuestas = {}
+
+# ---------------- LOGIN ----------------
 
 if not st.session_state.login:
 
     st.markdown("<div style='text-align:center'>", unsafe_allow_html=True)
-   st.image("logo_policia.PNG", width=220)
+    st.image("logo_policia.PNG", width=250)
     st.markdown("<h1>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
-    st.markdown("<h3>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<h3>PROGRAMA DE CERTIFICACIÓN</h3></div>", unsafe_allow_html=True)
 
-    with st.form("login_form"):
-        usuario = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        submit = st.form_submit_button("ACCEDER")
+    usuario = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
 
-    if submit:
-        df_users, _ = cargar_datos()
+    if st.button("ACCEDER") or password:
+
+        df_users = leer_sheet(GID_USUARIOS)
         df_users.columns = ["usuario", "password"]
 
-        if usuario in df_users["usuario"].astype(str).values:
-            pwd = df_users[df_users["usuario"] == usuario]["password"].values[0]
+        cred = dict(zip(df_users.usuario.astype(str), df_users.password.astype(str)))
 
-            if str(pwd) == password:
-                st.session_state.login = True
-                st.session_state.user = usuario
-                st.session_state.inicio = time.time()
-                st.rerun()
-            else:
-                st.error("Contraseña incorrecta")
+        if usuario in cred and str(cred[usuario]) == password:
+            st.session_state.login = True
+            st.session_state.usuario = usuario
+            st.session_state.inicio = time.time()
+            st.rerun()
         else:
-            st.error("Usuario incorrecto")
+            st.error("Usuario o contraseña incorrectos")
 
-# =================== EXAMEN ===================
+# ---------------- SISTEMA ----------------
 
 else:
 
-    df_users, df_q = cargar_datos()
+    tiempo_restante = TIEMPO_EXAMEN - int(time.time() - st.session_state.inicio)
 
-    st.sidebar.write(f"👮 Usuario: **{st.session_state.user}**")
+    st.sidebar.title("Panel de Control")
+    st.sidebar.write(f"👮 Usuario: **{st.session_state.usuario}**")
 
-    restante = max(0, TIEMPO_EXAMEN - int(time.time() - st.session_state.inicio))
-    m, s = divmod(restante, 60)
-    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+    if tiempo_restante <= 0:
+        st.sidebar.error("⏰ Tiempo agotado")
+    else:
+        m, s = divmod(tiempo_restante, 60)
+        st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
-    if restante <= 0:
-        st.error("⏰ TIEMPO AGOTADO")
-        st.stop()
+    if st.sidebar.button("Cerrar sesión"):
+        for k in st.session_state.keys():
+            del st.session_state[k]
+        st.rerun()
 
-    nivel = st.selectbox("Seleccione nivel:", sorted(df_q["Nivel"].dropna().unique()))
+    df = leer_sheet(GID_PREGUNTAS)
 
-    preguntas = df_q[df_q["Nivel"] == nivel].reset_index(drop=True)
+    st.title("Evaluación")
 
-    if "bloqueadas" not in st.session_state:
-        st.session_state.bloqueadas = set()
+    for i, fila in df.iterrows():
 
-    if "respuestas" not in st.session_state:
-        st.session_state.respuestas = {}
+        st.markdown(f"### {i+1}. {fila['Pregunta']}")
 
-    for idx, fila in preguntas.iterrows():
-
-        st.divider()
-        st.subheader(f"{idx+1}. {fila['Pregunta']}")
-
-        # VIDEO BLOQUEADO
-        if "video" in fila and pd.notna(fila["video"]) and fila["video"].endswith(".mp4"):
-
-            st.video(fila["video"])
-
-            duracion = 60  # segundos del video
-
-            key = f"video_{idx}_start"
-            if key not in st.session_state:
-                st.session_state[key] = time.time()
-
-            elapsed = time.time() - st.session_state[key]
-
-            if elapsed < duracion:
-                st.warning(f"🎥 Debe ver el video completo — faltan {int(duracion-elapsed)}s")
-                st.stop()
+        if pd.notna(fila.get("video", "")):
+            embed = youtube_embed(str(fila["video"]))
+            if embed:
+                st.markdown(
+                    f"""
+                    <iframe width="100%" height="350" src="{embed}"
+                    frameborder="0" allowfullscreen></iframe>
+                    """,
+                    unsafe_allow_html=True
+                )
 
         opciones = [fila["Opción_A"], fila["Opción_B"], fila["Opción_C"]]
 
-        if idx in st.session_state.bloqueadas:
-            st.error("❌ Pregunta bloqueada — respuesta incorrecta")
-            continue
+        key = f"preg_{i}"
 
-        r = st.radio("Seleccione:", opciones, key=f"q_{idx}")
+        if key not in st.session_state.respuestas:
 
-        if st.button("Confirmar", key=f"btn_{idx}"):
+            r = st.radio("Seleccione:", opciones, key=key)
 
-            if r == fila["Correcta"]:
-                st.success("✅ Respuesta correcta")
-                st.session_state.respuestas[idx] = True
+            if r:
+                st.session_state.respuestas[key] = r
+                st.rerun()
+
+        else:
+            seleccion = st.session_state.respuestas[key]
+
+            if seleccion == fila["Correcta"]:
+                st.success(f"✔ Respuesta correcta: {seleccion}")
             else:
-                st.error("❌ Respuesta incorrecta — pregunta bloqueada")
-                st.session_state.bloqueadas.add(idx)
+                st.error(f"✖ Respuesta incorrecta: {seleccion}")
 
-    # =================== RESULTADO ===================
+    if tiempo_restante <= 0 or len(st.session_state.respuestas) == len(df):
 
-    total = len(preguntas)
-    correctas = len(st.session_state.respuestas)
+        correctas = sum(
+            1 for i, fila in df.iterrows()
+            if st.session_state.respuestas.get(f"preg_{i}") == fila["Correcta"]
+        )
 
-    if st.button("FINALIZAR EXAMEN"):
-        porcentaje = (correctas / total) * 100
+        total = len(df)
+        porcentaje = int((correctas / total) * 100)
 
+        st.divider()
         if porcentaje >= 70:
-            st.success(f"APROBADO — {porcentaje:.0f}%")
+            st.success(f"RESULTADO: APROBADO — {porcentaje}%")
             st.balloons()
         else:
-            st.error(f"DESAPROBADO — {porcentaje:.0f}%")
+            st.error(f"RESULTADO: DESAPROBADO — {porcentaje}%")
 
         st.stop()
-
