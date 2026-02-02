@@ -8,8 +8,8 @@ st.set_page_config(page_title="División Negociadores", layout="centered")
 
 LOGO = "logo.PNG"
 
-URL_USUARIOS = "PEGÁ_ACÁ_TU_LINK_CSV_USUARIOS"
-URL_PREGUNTAS = "PEGÁ_ACÁ_TU_LINK_CSV_PREGUNTAS"
+URL_USUARIOS = "PEGÁ_ACÁ_EL_LINK_CSV_DE_USUARIOS"
+URL_PREGUNTAS = "PEGÁ_ACÁ_EL_LINK_CSV_DE_PREGUNTAS"
 
 TIEMPO_EXAMEN = 2 * 60  # 2 minutos
 
@@ -151,3 +151,4 @@ else:
             st.balloons()
         else:
             st.error(f"DESAPROBADO — {porcentaje:.0f}%")
+
