@@ -27,13 +27,15 @@ def leer_usuarios():
 
 # ==========================================
 
-# Auto-refresh cada 1 segundo (timer real)
+# Refresco automático cada 1 segundo
 st_autorefresh(interval=1000, key="timer")
 
 # ==========================================
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
+
+# =============== LOGIN =====================
 
 if not st.session_state.autenticado:
 
@@ -45,7 +47,7 @@ if not st.session_state.autenticado:
     st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
     st.divider()
 
-    with st.form("login_form"):
+    with st.form("login_form", clear_on_submit=False):
         usuario = st.text_input("Usuario")
         clave   = st.text_input("Contraseña", type="password")
         entrar  = st.form_submit_button("ACCEDER")
@@ -64,7 +66,7 @@ if not st.session_state.autenticado:
         else:
             st.error("Usuario o contraseña incorrectos")
 
-# ==========================================
+# =============== SISTEMA ====================
 
 else:
 
@@ -99,7 +101,7 @@ else:
 
         st.subheader(f"{i+1}. {fila['Pregunta']}")
 
-        # 👉 MOSTRAR VIDEO SI EXISTE
+        # 🎥 VIDEO INCRUSTADO
         if "Video" in fila and str(fila["Video"]).startswith("http"):
             st.video(fila["Video"])
 
