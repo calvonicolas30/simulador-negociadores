@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import os
 
 # ---------------- CONFIG ----------------
 
@@ -8,8 +9,9 @@ st.set_page_config(page_title="División Negociadores", layout="centered")
 
 LOGO = "logo.PNG"
 
-URL_USUARIOS = "PEGÁ_ACÁ_EL_LINK_CSV_DE_USUARIOS"
-URL_PREGUNTAS = "PEGÁ_ACÁ_EL_LINK_CSV_DE_PREGUNTAS"
+# PEGÁ ACÁ TUS LINKS CSV
+URL_USUARIOS = "PEGAR_LINK_CSV_USUARIOS"
+URL_PREGUNTAS = "PEGAR_LINK_CSV_PREGUNTAS"
 
 TIEMPO_EXAMEN = 2 * 60  # 2 minutos
 
@@ -24,7 +26,10 @@ def cargar_datos():
 def centrar_logo():
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.image(LOGO, width=260)
+        if os.path.exists(LOGO):
+            st.image(LOGO, width=260)
+        else:
+            st.markdown("### LOGO NO ENCONTRADO")
 
 # ---------------- SESSION ----------------
 
@@ -46,7 +51,7 @@ if not st.session_state.login:
     st.markdown("<h1 style='text-align:center;'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
 
-    with st.form("login_form"):
+    with st.form("login_form", clear_on_submit=False):
         usuario = st.text_input("Usuario")
         clave = st.text_input("Contraseña", type="password")
         ingresar = st.form_submit_button("INGRESAR")
@@ -68,7 +73,7 @@ if not st.session_state.login:
                 st.error("Usuario o contraseña incorrectos")
 
         except Exception as e:
-            st.error(f"No se pudo conectar con la base: {e}")
+            st.error("No se pudo conectar con la base de datos")
 
 # ---------------- SISTEMA ----------------
 
@@ -96,6 +101,7 @@ else:
 
     min, seg = divmod(restante, 60)
     st.sidebar.warning(f"⏳ Tiempo restante: {min:02d}:{seg:02d}")
+
     time.sleep(1)
     st.experimental_rerun()
 
@@ -105,22 +111,24 @@ else:
 
         st.markdown(f"### {i+1}. {fila['Pregunta']}")
 
+        # VIDEO BLOQUEADO
         if "Video" in fila and pd.notna(fila["Video"]):
             video_html = f"""
-            <iframe width="100%" height="350"
-            src="{fila['Video']}?controls=0&rel=0"
+            <iframe width="100%" height="360"
+            src="{fila['Video']}?controls=0&rel=0&modestbranding=1&disablekb=1"
             frameborder="0"
             allowfullscreen></iframe>
             """
-            st.components.v1.html(video_html, height=360)
+            st.components.v1.html(video_html, height=370)
 
         opciones = [fila["Opción_A"], fila["Opción_B"], fila["Opción_C"]]
 
         key = f"preg_{i}"
 
+        # BLOQUEO DE RESPUESTA
         if key not in st.session_state.respuestas:
 
-            r = st.radio("Seleccione:", opciones, key=key)
+            r = st.radio("Seleccione una opción:", opciones, key=key)
 
             if st.button(f"Confirmar {i+1}"):
                 st.session_state.respuestas[key] = r
@@ -134,6 +142,8 @@ else:
             else:
                 st.error(f"✖ Incorrecta: {marcada}")
                 st.info(f"✔ Correcta: {fila['Correcta']}")
+
+    # ---------------- RESULTADO FINAL ----------------
 
     if len(st.session_state.respuestas) == len(preguntas):
 
@@ -151,4 +161,3 @@ else:
             st.balloons()
         else:
             st.error(f"DESAPROBADO — {porcentaje:.0f}%")
-
