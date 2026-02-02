@@ -1,15 +1,17 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import time
 
+# ---------------- CONFIG ----------------
 st.set_page_config(page_title="División Negociadores", layout="centered")
 
-# ---------------- CONEXIÓN GOOGLE SHEETS ----------------
-conn = st.connection("gsheets", type="gspread")
+# ---------------- CONEXIÓN GOOGLE ----------------
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 def cargar_datos():
-    df_p = conn.read(worksheet="preguntas")
-    df_u = conn.read(worksheet="usuarios")
+    df_p = conn.read(worksheet="preguntas", ttl="1m")
+    df_u = conn.read(worksheet="usuarios", ttl="1m")
     return df_p, df_u
 
 # ---------------- SESSION ----------------
@@ -35,7 +37,8 @@ if not st.session_state.login:
             _, df_users = cargar_datos()
             df_users.columns = [c.strip().lower() for c in df_users.columns]
 
-            cred = dict(zip(df_users["usuario"].astype(str), df_users["password"].astype(str)))
+            cred = dict(zip(df_users["usuario"].astype(str),
+                            df_users["password"].astype(str)))
 
             if usuario in cred and cred[usuario] == password:
                 st.session_state.login = True
@@ -54,6 +57,7 @@ else:
     st.sidebar.success(f"Usuario: {st.session_state.usuario}")
     if st.sidebar.button("Cerrar sesión"):
         st.session_state.login = False
+        st.session_state.clear()
         st.rerun()
 
     df, _ = cargar_datos()
@@ -81,18 +85,20 @@ else:
         st.subheader(f"{i+1}. {row['Pregunta']}")
 
         # Video bloqueado
-        if "video" in row and str(row["video"]).startswith("http"):
-            vid = row["video"].split("v=")[1]
-            st.components.v1.html(f"""
-            <iframe width="100%" height="360"
-            src="https://www.youtube.com/embed/{vid}?controls=0&disablekb=1&modestbranding=1&rel=0"
-            frameborder="0"
-            allow="autoplay; encrypted-media"
-            allowfullscreen>
-            </iframe>
-            """, height=380)
+        if "video" in df.columns and pd.notna(row["video"]):
+            if "v=" in row["video"]:
+                vid = row["video"].split("v=")[1].split("&")[0]
+                st.components.v1.html(f"""
+                <iframe width="100%" height="360"
+                src="https://www.youtube.com/embed/{vid}?controls=0&disablekb=1&modestbranding=1&rel=0"
+                frameborder="0"
+                allow="autoplay; encrypted-media"
+                allowfullscreen>
+                </iframe>
+                """, height=380)
 
         opciones = [row["Opción_A"], row["Opción_B"], row["Opción_C"]]
         st.radio("Seleccione:", opciones, key=f"q{i}")
 
-    st.success("Sistema operativo")
+    st.success("Sistema funcionando correctamente")
+
