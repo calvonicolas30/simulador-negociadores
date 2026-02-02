@@ -31,7 +31,7 @@ if "inicio" not in st.session_state:
 if not st.session_state.login:
 
     st.markdown("<div style='text-align:center'>", unsafe_allow_html=True)
-    st.image("logo.PNG", width=220)
+   st.image("logo_policia.PNG", width=220)
     st.markdown("<h1>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
     st.markdown("<h3>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
