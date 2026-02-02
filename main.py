@@ -27,7 +27,7 @@ def leer_usuarios():
 
 # ==========================================
 
-# Auto-refresh cada 1 segundo
+# Auto-refresh cada 1 segundo (timer real)
 st_autorefresh(interval=1000, key="timer")
 
 # ==========================================
@@ -98,6 +98,10 @@ else:
     for i, fila in preguntas.iterrows():
 
         st.subheader(f"{i+1}. {fila['Pregunta']}")
+
+        # 👉 MOSTRAR VIDEO SI EXISTE
+        if "Video" in fila and str(fila["Video"]).startswith("http"):
+            st.video(fila["Video"])
 
         opciones = [fila["Opción_A"], fila["Opción_B"], fila["Opción_C"]]
 
