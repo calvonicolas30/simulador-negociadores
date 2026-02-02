@@ -1,135 +1,141 @@
 import streamlit as st
 import pandas as pd
 import time
-from streamlit_autorefresh import st_autorefresh
+from datetime import datetime
 
-# ================= CONFIG ==================
+# =================== CONFIG ===================
 
-st.set_page_config(page_title="División Negociadores", layout="centered")
+SHEET_ID = "1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA"
 
-PREGUNTAS_CSV = "https://docs.google.com/spreadsheets/d/1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA/export?format=csv&gid=0"
-USUARIOS_CSV   = "https://docs.google.com/spreadsheets/d/1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA/export?format=csv&gid=275635797"
+URL_USERS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=usuarios"
+URL_QUESTIONS = f"https://docs.google.com/spreadsheets/d/{SHEET_ID}/gviz/tq?tqx=out:csv&sheet=preguntas"
 
-TIEMPO_EXAMEN = 2 * 60   # 2 minutos
+TIEMPO_EXAMEN = 2 * 60  # 2 minutos
 
-# ==========================================
+# =================== FUNCIONES ===================
 
-@st.cache_data
-def leer_preguntas():
-    return pd.read_csv(PREGUNTAS_CSV)
+@st.cache_data(ttl=300)
+def cargar_datos():
+    return pd.read_csv(URL_USERS), pd.read_csv(URL_QUESTIONS)
 
-@st.cache_data
-def leer_usuarios():
-    df = pd.read_csv(USUARIOS_CSV, header=None)
-    df = df.iloc[:, :2]
-    df.columns = ["usuario", "password"]
-    return df
+# =================== SESION ===================
 
-# ==========================================
+if "login" not in st.session_state:
+    st.session_state.login = False
 
-# Refresco automático cada 1 segundo
-st_autorefresh(interval=1000, key="timer")
+if "inicio" not in st.session_state:
+    st.session_state.inicio = time.time()
 
-# ==========================================
+# =================== LOGIN ===================
 
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
+if not st.session_state.login:
 
-# =============== LOGIN =====================
+    st.markdown("<div style='text-align:center'>", unsafe_allow_html=True)
+    st.image("logo.PNG", width=220)
+    st.markdown("<h1>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
+    st.markdown("<h3>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
-if not st.session_state.autenticado:
-
-    col1, col2, col3 = st.columns([1,2,1])
-    with col2:
-        st.image("logo_policia.PNG", width=320)
-
-    st.markdown("<h1 style='text-align:center;'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
-    st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
-    st.divider()
-
-    with st.form("login_form", clear_on_submit=False):
+    with st.form("login_form"):
         usuario = st.text_input("Usuario")
-        clave   = st.text_input("Contraseña", type="password")
-        entrar  = st.form_submit_button("ACCEDER")
+        password = st.text_input("Contraseña", type="password")
+        submit = st.form_submit_button("ACCEDER")
 
-    if entrar:
+    if submit:
+        df_users, _ = cargar_datos()
+        df_users.columns = ["usuario", "password"]
 
-        df_users = leer_usuarios()
-        cred = dict(zip(df_users["usuario"].astype(str), df_users["password"].astype(str)))
+        if usuario in df_users["usuario"].astype(str).values:
+            pwd = df_users[df_users["usuario"] == usuario]["password"].values[0]
 
-        if usuario in cred and str(cred[usuario]) == clave:
-            st.session_state.autenticado = True
-            st.session_state.usuario_actual = usuario
-            st.session_state.inicio = time.time()
-            st.session_state.respuestas = {}
-            st.rerun()
+            if str(pwd) == password:
+                st.session_state.login = True
+                st.session_state.user = usuario
+                st.session_state.inicio = time.time()
+                st.rerun()
+            else:
+                st.error("Contraseña incorrecta")
         else:
-            st.error("Usuario o contraseña incorrectos")
+            st.error("Usuario incorrecto")
 
-# =============== SISTEMA ====================
+# =================== EXAMEN ===================
 
 else:
 
-    st.sidebar.title("Panel de Control")
-    st.sidebar.write(f"👮 Usuario: **{st.session_state.usuario_actual}**")
+    df_users, df_q = cargar_datos()
 
-    if st.sidebar.button("Cerrar sesión"):
-        st.session_state.clear()
-        st.rerun()
+    st.sidebar.write(f"👮 Usuario: **{st.session_state.user}**")
 
-    df = leer_preguntas()
+    restante = max(0, TIEMPO_EXAMEN - int(time.time() - st.session_state.inicio))
+    m, s = divmod(restante, 60)
+    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
-    nivel = st.selectbox("Seleccione nivel:", sorted(df["Nivel"].dropna().unique()))
-    preguntas = df[df["Nivel"] == nivel].reset_index(drop=True)
-
-    if preguntas.empty:
-        st.warning("No hay preguntas para este nivel.")
-        st.stop()
-
-    tiempo_restante = TIEMPO_EXAMEN - int(time.time() - st.session_state.inicio)
-
-    if tiempo_restante <= 0:
+    if restante <= 0:
         st.error("⏰ TIEMPO AGOTADO")
         st.stop()
 
-    m, s = divmod(tiempo_restante, 60)
-    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+    nivel = st.selectbox("Seleccione nivel:", sorted(df_q["Nivel"].dropna().unique()))
 
-    st.header("Evaluación")
+    preguntas = df_q[df_q["Nivel"] == nivel].reset_index(drop=True)
 
-    for i, fila in preguntas.iterrows():
+    if "bloqueadas" not in st.session_state:
+        st.session_state.bloqueadas = set()
 
-        st.subheader(f"{i+1}. {fila['Pregunta']}")
+    if "respuestas" not in st.session_state:
+        st.session_state.respuestas = {}
 
-        # 🎥 VIDEO INCRUSTADO
-        if "Video" in fila and str(fila["Video"]).startswith("http"):
-            st.video(fila["Video"])
+    for idx, fila in preguntas.iterrows():
+
+        st.divider()
+        st.subheader(f"{idx+1}. {fila['Pregunta']}")
+
+        # VIDEO BLOQUEADO
+        if "video" in fila and pd.notna(fila["video"]) and fila["video"].endswith(".mp4"):
+
+            st.video(fila["video"])
+
+            duracion = 60  # segundos del video
+
+            key = f"video_{idx}_start"
+            if key not in st.session_state:
+                st.session_state[key] = time.time()
+
+            elapsed = time.time() - st.session_state[key]
+
+            if elapsed < duracion:
+                st.warning(f"🎥 Debe ver el video completo — faltan {int(duracion-elapsed)}s")
+                st.stop()
 
         opciones = [fila["Opción_A"], fila["Opción_B"], fila["Opción_C"]]
 
-        if i in st.session_state.respuestas:
-            st.radio("Respuesta:", opciones,
-                     index=opciones.index(st.session_state.respuestas[i]),
-                     disabled=True, key=f"q{i}")
-        else:
-            r = st.radio("Respuesta:", opciones, key=f"q{i}")
-            if st.button("Confirmar", key=f"b{i}"):
-                st.session_state.respuestas[i] = r
+        if idx in st.session_state.bloqueadas:
+            st.error("❌ Pregunta bloqueada — respuesta incorrecta")
+            continue
 
-    if len(st.session_state.respuestas) == len(preguntas):
+        r = st.radio("Seleccione:", opciones, key=f"q_{idx}")
 
-        aciertos = sum(
-            1 for i, fila in preguntas.iterrows()
-            if st.session_state.respuestas[i] == fila["Correcta"]
-        )
+        if st.button("Confirmar", key=f"btn_{idx}"):
 
-        total = len(preguntas)
-        porcentaje = aciertos / total * 100
+            if r == fila["Correcta"]:
+                st.success("✅ Respuesta correcta")
+                st.session_state.respuestas[idx] = True
+            else:
+                st.error("❌ Respuesta incorrecta — pregunta bloqueada")
+                st.session_state.bloqueadas.add(idx)
 
-        st.divider()
+    # =================== RESULTADO ===================
+
+    total = len(preguntas)
+    correctas = len(st.session_state.respuestas)
+
+    if st.button("FINALIZAR EXAMEN"):
+        porcentaje = (correctas / total) * 100
 
         if porcentaje >= 70:
-            st.success(f"RESULTADO: APROBADO — {porcentaje:.0f}%")
+            st.success(f"APROBADO — {porcentaje:.0f}%")
             st.balloons()
         else:
-            st.error(f"RESULTADO: DESAPROBADO — {porcentaje:.0f}%")
+            st.error(f"DESAPROBADO — {porcentaje:.0f}%")
+
+        st.stop()
+
