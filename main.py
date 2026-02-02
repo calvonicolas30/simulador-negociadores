@@ -1,116 +1,139 @@
 import streamlit as st
 import pandas as pd
 import time
-from st_gsheets_connection import GSheetsConnection
+from streamlit_autorefresh import st_autorefresh
 
-# ---------------- CONFIG ----------------
+# ================= CONFIG ==================
+
 st.set_page_config(page_title="División Negociadores", layout="centered")
 
-LOGO = "logo_policia.PNG"
-TIEMPO_LIMITE = 120  # 2 minutos
+PREGUNTAS_CSV = "https://docs.google.com/spreadsheets/d/1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA/export?format=csv&gid=0"
+USUARIOS_CSV   = "https://docs.google.com/spreadsheets/d/1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA/export?format=csv&gid=275635797"
 
-# ID DE TU GOOGLE SHEET
-SHEET_ID = "1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA"
+TIEMPO_EXAMEN = 2 * 60   # 2 minutos
 
-# ---------------------------------------
+# ==========================================
 
-@st.cache_data(ttl=60)
-def cargar_datos():
-    conn = st.connection("gsheets", type=GSheetsConnection, spreadsheet=SHEET_ID)
-    preguntas = conn.read(worksheet="preguntas")
-    usuarios = conn.read(worksheet="usuarios")
-    return preguntas, usuarios
+@st.cache_data
+def leer_preguntas():
+    return pd.read_csv(PREGUNTAS_CSV)
 
-# ----------- SESSION STATE -------------
-if "login" not in st.session_state:
-    st.session_state.login = False
+@st.cache_data
+def leer_usuarios():
+    df = pd.read_csv(USUARIOS_CSV, header=None)
+    df = df.iloc[:, :2]
+    df.columns = ["usuario", "password"]
+    return df
 
-if "inicio" not in st.session_state:
-    st.session_state.inicio = None
+# ==========================================
 
-if "idx" not in st.session_state:
-    st.session_state.idx = 0
+# Refresco automático cada 1 segundo
+st_autorefresh(interval=1000, key="timer")
 
-if "bloqueadas" not in st.session_state:
-    st.session_state.bloqueadas = set()
+# ==========================================
 
-# ---------------------------------------
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
 
-def login():
+# =============== LOGIN =====================
+
+if not st.session_state.autenticado:
+
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.image(LOGO, width=260)
-        st.markdown("<h1 style='text-align:center'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align:center'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
+        st.image("logo_policia.PNG", width=320)
 
-        usuario = st.text_input("Usuario", key="user")
-        password = st.text_input("Contraseña", type="password", key="pass")
+    st.markdown("<h1 style='text-align:center;'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
+    st.divider()
 
-        if st.button("Ingresar") or (usuario and password):
-            df_p, df_u = cargar_datos()
-            df_u.columns = ["usuario", "password"]
+    with st.form("login_form", clear_on_submit=False):
+        usuario = st.text_input("Usuario")
+        clave   = st.text_input("Contraseña", type="password")
+        entrar  = st.form_submit_button("ACCEDER")
 
-            ok = df_u[(df_u.usuario == usuario) & (df_u.password == password)]
-            if not ok.empty:
-                st.session_state.login = True
-                st.session_state.inicio = time.time()
-                st.experimental_rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos")
+    if entrar:
 
-# ---------------------------------------
+        df_users = leer_usuarios()
+        cred = dict(zip(df_users["usuario"].astype(str), df_users["password"].astype(str)))
 
-def temporizador():
-    tiempo_restante = TIEMPO_LIMITE - int(time.time() - st.session_state.inicio)
-    if tiempo_restante <= 0:
-        st.error("⏰ Tiempo agotado")
+        if usuario in cred and str(cred[usuario]) == clave:
+            st.session_state.autenticado = True
+            st.session_state.usuario_actual = usuario
+            st.session_state.inicio = time.time()
+            st.session_state.respuestas = {}
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos")
+
+# =============== SISTEMA ====================
+
+else:
+
+    st.sidebar.title("Panel de Control")
+    st.sidebar.write(f"👮 Usuario: **{st.session_state.usuario_actual}**")
+
+    if st.sidebar.button("Cerrar sesión"):
+        st.session_state.clear()
+        st.rerun()
+
+    df = leer_preguntas()
+
+    nivel = st.selectbox("Seleccione nivel:", sorted(df["Nivel"].dropna().unique()))
+    preguntas = df[df["Nivel"] == nivel].reset_index(drop=True)
+
+    if preguntas.empty:
+        st.warning("No hay preguntas para este nivel.")
         st.stop()
 
-    minutos = tiempo_restante // 60
-    segundos = tiempo_restante % 60
-    st.markdown(f"## ⏳ {minutos:02}:{segundos:02}")
+    tiempo_restante = TIEMPO_EXAMEN - int(time.time() - st.session_state.inicio)
 
-    time.sleep(1)
-    st.experimental_rerun()
+    if tiempo_restante <= 0:
+        st.error("⏰ TIEMPO AGOTADO")
+        st.stop()
 
-# ---------------------------------------
+    m, s = divmod(tiempo_restante, 60)
+    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
-def preguntas():
-    df, _ = cargar_datos()
-    fila = df.iloc[st.session_state.idx]
+    st.header("Evaluación")
 
-    st.subheader(f"Nivel: {fila['Nivel']}")
-    st.markdown(f"### {fila['Pregunta']}")
+    for i, fila in preguntas.iterrows():
 
-    if pd.notna(fila.get("Video", None)):
-        st.video(fila["Video"])
+        st.subheader(f"{i+1}. {fila['Pregunta']}")
 
-    opciones = [fila['Opción_A'], fila['Opción_B'], fila['Opción_C']]
+        # 🎥 VIDEO INCRUSTADO
+        if "Video" in fila and str(fila["Video"]).startswith("http"):
+            st.video(fila["Video"])
 
-    bloqueada = st.session_state.idx in st.session_state.bloqueadas
+        opciones = [fila["Opción_A"], fila["Opción_B"], fila["Opción_C"]]
 
-    seleccion = st.radio(
-        "Seleccione una opción:",
-        opciones,
-        disabled=bloqueada
-    )
-
-    if st.button("Confirmar respuesta") and not bloqueada:
-        if seleccion == fila["Correcta"]:
-            st.success("✅ Correcto")
-            st.session_state.idx += 1
-            st.experimental_rerun()
+        if i in st.session_state.respuestas:
+            st.radio("Respuesta:", opciones,
+                     index=opciones.index(st.session_state.respuestas[i]),
+                     disabled=True, key=f"q{i}")
         else:
-            st.error("❌ Incorrecto – Pregunta bloqueada")
-            st.session_state.bloqueadas.add(st.session_state.idx)
+            r = st.radio("Respuesta:", opciones, key=f"q{i}")
+            if st.button("Confirmar", key=f"b{i}"):
+                st.session_state.respuestas[i] = r
 
-# ---------------------------------------
+    if len(st.session_state.respuestas) == len(preguntas):
 
-if not st.session_state.login:
-    login()
-else:
-    temporizador()
-    preguntas()
+        aciertos = sum(
+            1 for i, fila in preguntas.iterrows()
+            if st.session_state.respuestas[i] == fila["Correcta"]
+        )
+
+        total = len(preguntas)
+        porcentaje = aciertos / total * 100
+
+        st.divider()
+
+        if porcentaje >= 70:
+            st.success(f"RESULTADO: APROBADO — {porcentaje:.0f}%")
+            st.balloons()
+        else:
+            st.error(f"RESULTADO: DESAPROBADO — {porcentaje:.0f}%")
+
 
 
 
