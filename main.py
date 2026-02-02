@@ -18,6 +18,12 @@ def cargar_datos():
 if "login" not in st.session_state:
     st.session_state.login = False
 
+if "inicio" not in st.session_state:
+    st.session_state.inicio = None
+
+if "respuestas" not in st.session_state:
+    st.session_state.respuestas = {}
+
 # ---------------- LOGIN ----------------
 if not st.session_state.login:
 
@@ -31,7 +37,7 @@ if not st.session_state.login:
     usuario = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
 
-    if st.button("ACCEDER"):
+    if st.button("ACCEDER") or password:
 
         try:
             _, df_users = cargar_datos()
@@ -43,6 +49,8 @@ if not st.session_state.login:
             if usuario in cred and cred[usuario] == password:
                 st.session_state.login = True
                 st.session_state.usuario = usuario
+                st.session_state.inicio = time.time()
+                st.session_state.respuestas = {}
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos")
@@ -56,35 +64,31 @@ else:
 
     st.sidebar.success(f"Usuario: {st.session_state.usuario}")
     if st.sidebar.button("Cerrar sesión"):
-        st.session_state.login = False
         st.session_state.clear()
         st.rerun()
 
     df, _ = cargar_datos()
 
-    if "inicio" not in st.session_state:
-        st.session_state.inicio = time.time()
-
+    # ---------- TIMER ----------
     TIEMPO_TOTAL = 2 * 60  # 2 minutos
+    transcurrido = int(time.time() - st.session_state.inicio)
+    restante = TIEMPO_TOTAL - transcurrido
 
-    restante = TIEMPO_TOTAL - int(time.time() - st.session_state.inicio)
-    if restante < 0:
-        restante = 0
+    if restante <= 0:
+        st.error("⛔ TIEMPO AGOTADO")
+        st.stop()
 
     m, s = divmod(restante, 60)
     st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
-    if restante == 0:
-        st.error("⛔ TIEMPO AGOTADO")
-        st.stop()
-
     st.header("Evaluación")
 
+    # ---------- PREGUNTAS ----------
     for i, row in df.iterrows():
 
         st.subheader(f"{i+1}. {row['Pregunta']}")
 
-        # Video bloqueado
+        # ---- VIDEO BLOQUEADO ----
         if "video" in df.columns and pd.notna(row["video"]):
             if "v=" in row["video"]:
                 vid = row["video"].split("v=")[1].split("&")[0]
@@ -98,7 +102,32 @@ else:
                 """, height=380)
 
         opciones = [row["Opción_A"], row["Opción_B"], row["Opción_C"]]
-        st.radio("Seleccione:", opciones, key=f"q{i}")
 
-    st.success("Sistema funcionando correctamente")
+        if i in st.session_state.respuestas:
+            st.radio("Respuesta:", opciones, 
+                     index=opciones.index(st.session_state.respuestas[i]),
+                     key=f"q{i}", disabled=True)
+        else:
+            r = st.radio("Respuesta:", opciones, key=f"q{i}")
+            if r:
+                st.session_state.respuestas[i] = r
+
+    # ---------- FINAL ----------
+    if st.button("FINALIZAR EXAMEN"):
+        aciertos = 0
+        for i, row in df.iterrows():
+            if i in st.session_state.respuestas:
+                if st.session_state.respuestas[i] == row["Correcta"]:
+                    aciertos += 1
+
+        total = len(df)
+        porcentaje = int((aciertos / total) * 100)
+
+        if porcentaje >= 70:
+            st.success(f"✅ APROBADO — {porcentaje}%")
+            st.balloons()
+        else:
+            st.error(f"❌ DESAPROBADO — {porcentaje}%")
+
+        st.stop()
 
