@@ -1,37 +1,35 @@
 import streamlit as st
+from st_gsheets_connection import GSheetsConnection
 import pandas as pd
 import time
 import os
 
-# ---------------- CONFIG ----------------
+# ---------- CONFIG ----------
 
 st.set_page_config(page_title="División Negociadores", layout="centered")
 
 LOGO = "logo.PNG"
-
-# PEGÁ ACÁ TUS LINKS CSV
-URL_USUARIOS = "PEGAR_LINK_CSV_USUARIOS"
-URL_PREGUNTAS = "PEGAR_LINK_CSV_PREGUNTAS"
-
 TIEMPO_EXAMEN = 2 * 60  # 2 minutos
 
-# ---------------- FUNCIONES ----------------
+# ---------- CONEXIÓN GOOGLE ----------
 
-@st.cache_data(ttl=60)
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+@st.cache_data(ttl=30)
 def cargar_datos():
-    usuarios = pd.read_csv(URL_USUARIOS)
-    preguntas = pd.read_csv(URL_PREGUNTAS)
-    return usuarios, preguntas
+    preguntas = conn.read(worksheet="preguntas")
+    usuarios = conn.read(worksheet="usuarios")
+    return preguntas, usuarios
+
+# ---------- UI ----------
 
 def centrar_logo():
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         if os.path.exists(LOGO):
             st.image(LOGO, width=260)
-        else:
-            st.markdown("### LOGO NO ENCONTRADO")
 
-# ---------------- SESSION ----------------
+# ---------- SESSION ----------
 
 if "login" not in st.session_state:
     st.session_state.login = False
@@ -42,7 +40,7 @@ if "inicio" not in st.session_state:
 if "respuestas" not in st.session_state:
     st.session_state.respuestas = {}
 
-# ---------------- LOGIN ----------------
+# ---------- LOGIN ----------
 
 if not st.session_state.login:
 
@@ -51,14 +49,14 @@ if not st.session_state.login:
     st.markdown("<h1 style='text-align:center;'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center;'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
 
-    with st.form("login_form", clear_on_submit=False):
+    with st.form("login_form"):
         usuario = st.text_input("Usuario")
         clave = st.text_input("Contraseña", type="password")
         ingresar = st.form_submit_button("INGRESAR")
 
     if ingresar:
         try:
-            df_users, _ = cargar_datos()
+            _, df_users = cargar_datos()
             df_users.columns = ["usuario", "password"]
 
             cred = dict(zip(df_users["usuario"].astype(str),
@@ -73,9 +71,10 @@ if not st.session_state.login:
                 st.error("Usuario o contraseña incorrectos")
 
         except Exception as e:
-            st.error("No se pudo conectar con la base de datos")
+            st.error("No se pudo conectar con Google Sheets")
+            st.exception(e)
 
-# ---------------- SISTEMA ----------------
+# ---------- SISTEMA ----------
 
 else:
 
@@ -85,13 +84,11 @@ else:
         st.session_state.clear()
         st.experimental_rerun()
 
-    _, df = cargar_datos()
+    df, _ = cargar_datos()
 
     nivel = st.selectbox("Seleccione nivel:", df["Nivel"].unique())
 
     preguntas = df[df["Nivel"] == nivel].reset_index(drop=True)
-
-    # ---------------- TIMER REAL ----------------
 
     restante = int(TIEMPO_EXAMEN - (time.time() - st.session_state.inicio))
 
@@ -99,19 +96,16 @@ else:
         st.error("⛔ TIEMPO FINALIZADO")
         st.stop()
 
-    min, seg = divmod(restante, 60)
-    st.sidebar.warning(f"⏳ Tiempo restante: {min:02d}:{seg:02d}")
+    m, s = divmod(restante, 60)
+    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
 
     time.sleep(1)
     st.experimental_rerun()
-
-    # ---------------- PREGUNTAS ----------------
 
     for i, fila in preguntas.iterrows():
 
         st.markdown(f"### {i+1}. {fila['Pregunta']}")
 
-        # VIDEO BLOQUEADO
         if "Video" in fila and pd.notna(fila["Video"]):
             video_html = f"""
             <iframe width="100%" height="360"
@@ -125,7 +119,6 @@ else:
 
         key = f"preg_{i}"
 
-        # BLOQUEO DE RESPUESTA
         if key not in st.session_state.respuestas:
 
             r = st.radio("Seleccione una opción:", opciones, key=key)
@@ -143,8 +136,6 @@ else:
                 st.error(f"✖ Incorrecta: {marcada}")
                 st.info(f"✔ Correcta: {fila['Correcta']}")
 
-    # ---------------- RESULTADO FINAL ----------------
-
     if len(st.session_state.respuestas) == len(preguntas):
 
         aciertos = sum(
@@ -161,3 +152,4 @@ else:
             st.balloons()
         else:
             st.error(f"DESAPROBADO — {porcentaje:.0f}%")
+
