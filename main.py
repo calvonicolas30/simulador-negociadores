@@ -2,94 +2,138 @@ import streamlit as st
 import pandas as pd
 import time
 
+# ================== CONFIG ==================
+
 st.set_page_config(page_title="División Negociadores", layout="centered")
 
-# ---------- LINKS DIRECTOS CSV ----------
-BASE = "https://docs.google.com/spreadsheets/d/1Xg4QZrUuF-r5rW5s8ZJJrIIHsNI5UzZ0taJ6CYcV-oA"
+LOGO = "logo.PNG"
 
-URL_PREGUNTAS = BASE + "/gviz/tq?tqx=out:csv&sheet=preguntas"
-URL_USUARIOS   = BASE + "/gviz/tq?tqx=out:csv&sheet=usuarios"
+USUARIOS_URL = "PEGÁ_ACÁ_TU_CSV_DE_USUARIOS"
+PREGUNTAS_URL = "PEGÁ_ACÁ_TU_CSV_DE_PREGUNTAS"
 
+TIEMPO_POR_PREGUNTA = 120  # 2 minutos
+
+# ================== FUNCIONES ==================
+
+@st.cache_data(ttl=60)
 def cargar_datos():
-    df_p = pd.read_csv(URL_PREGUNTAS)
-    df_u = pd.read_csv(URL_USUARIOS)
-    return df_p, df_u
+    df_users = pd.read_csv(USUARIOS_URL)
+    df_preg = pd.read_csv(PREGUNTAS_URL)
+    return df_users, df_preg
 
-# ---------- SESSION ----------
+def iniciar_timer():
+    if "fin" not in st.session_state:
+        st.session_state.fin = time.time() + TIEMPO_POR_PREGUNTA
+
+def tiempo_restante():
+    return max(0, int(st.session_state.fin - time.time()))
+
+# ================== SESIÓN ==================
+
 if "login" not in st.session_state:
     st.session_state.login = False
 
-if "inicio" not in st.session_state:
-    st.session_state.inicio = None
+if "idx" not in st.session_state:
+    st.session_state.idx = 0
 
-# ---------- LOGIN ----------
+if "bloqueada" not in st.session_state:
+    st.session_state.bloqueada = False
+
+# ================== LOGIN ==================
+
 if not st.session_state.login:
 
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
-        st.image("logo_policia.PNG", use_container_width=True)
+        st.image(LOGO, width=260)
 
     st.markdown("<h1 style='text-align:center'>DIVISIÓN NEGOCIADORES</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align:center'>PROGRAMA DE CERTIFICACIÓN</h3>", unsafe_allow_html=True)
 
+    st.divider()
+
     usuario = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
 
-    if st.button("ACCEDER"):
+    if st.button("Ingresar") or (usuario and password and st.session_state.get("enter", False)):
 
-        df_p, df_u = cargar_datos()
-        df_u.columns = [c.strip().lower() for c in df_u.columns]
+        df_users, _ = cargar_datos()
 
-        cred = dict(zip(df_u["usuario"].astype(str),
-                        df_u["password"].astype(str)))
-
-        if usuario in cred and cred[usuario] == password:
+        if ((df_users["usuario"] == usuario) & (df_users["password"] == password)).any():
             st.session_state.login = True
-            st.session_state.usuario = usuario
-            st.session_state.inicio = time.time()
-            st.rerun()
+            st.session_state.fin = time.time() + TIEMPO_POR_PREGUNTA
+            st.experimental_rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
 
-# ---------- SISTEMA ----------
-else:
+    st.stop()
 
-    st.sidebar.success(f"Usuario: {st.session_state.usuario}")
-    if st.sidebar.button("Cerrar sesión"):
-        st.session_state.clear()
-        st.rerun()
+# ================== PREGUNTAS ==================
 
-    df, _ = cargar_datos()
+df_users, df_preg = cargar_datos()
 
-    TIEMPO_TOTAL = 2 * 60
-    restante = TIEMPO_TOTAL - int(time.time() - st.session_state.inicio)
+if st.session_state.idx >= len(df_preg):
+    st.success("🎯 Examen finalizado")
+    st.stop()
 
-    if restante <= 0:
-        st.error("⛔ TIEMPO AGOTADO")
-        st.stop()
+preg = df_preg.iloc[st.session_state.idx]
 
-    m, s = divmod(restante, 60)
-    st.sidebar.warning(f"⏳ Tiempo restante: {m:02d}:{s:02d}")
+# ================== TIMER ==================
 
-    st.header("Evaluación")
+iniciar_timer()
+restante = tiempo_restante()
 
-    for i, row in df.iterrows():
+mins = restante // 60
+secs = restante % 60
 
-        st.subheader(f"{i+1}. {row['Pregunta']}")
+st.markdown(f"⏳ Tiempo restante: **{mins:02}:{secs:02}**")
 
-        if "video" in df.columns and pd.notna(row["video"]):
-            if "v=" in row["video"]:
-                vid = row["video"].split("v=")[1].split("&")[0]
-                st.components.v1.html(f"""
-                <iframe width="100%" height="360"
-                src="https://www.youtube.com/embed/{vid}?controls=0&disablekb=1&modestbranding=1&rel=0"
-                frameborder="0"
-                allowfullscreen>
-                </iframe>
-                """, height=380)
+if restante <= 0:
+    st.session_state.idx += 1
+    st.session_state.bloqueada = False
+    del st.session_state.fin
+    st.experimental_rerun()
 
-        opciones = [row["Opción_A"], row["Opción_B"], row["Opción_C"]]
-        st.radio("Respuesta:", opciones, key=i)
+# ================== MOSTRAR VIDEO ==================
+
+if "Video" in preg and isinstance(preg["Video"], str) and preg["Video"].startswith("http"):
+
+    video_html = f"""
+    <iframe width="100%" height="315"
+    src="{preg['Video']}?controls=0&disablekb=1&modestbranding=1&rel=0"
+    frameborder="0"
+    allowfullscreen></iframe>
+    """
+    st.components.v1.html(video_html, height=340)
+
+# ================== PREGUNTA ==================
+
+st.subheader(f"Nivel: {preg['Nivel']}")
+st.markdown(f"### {preg['Pregunta']}")
+
+opciones = {
+    "A": preg["Opcion_A"],
+    "B": preg["Opcion_B"],
+    "C": preg["Opcion_C"]
+}
+
+for letra, texto in opciones.items():
+
+    if st.session_state.bloqueada:
+        st.button(f"{letra}) {texto}", disabled=True)
+    else:
+        if st.button(f"{letra}) {texto}"):
+
+            if letra == str(preg["Correcta"]).strip():
+                st.success("✅ Correcto")
+                st.session_state.idx += 1
+                st.session_state.bloqueada = False
+                del st.session_state.fin
+                time.sleep(1)
+                st.experimental_rerun()
+            else:
+                st.error("❌ Incorrecto")
+                st.session_state.bloqueada = True
 
     st.success("Sistema operativo")
 
